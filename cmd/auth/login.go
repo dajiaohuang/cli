@@ -226,6 +226,10 @@ func authLoginRun(opts *LoginOptions) error {
 			candidateScopes = collectScopesForDomains(sortedKnownDomains(config.Brand), "user", config.Brand)
 		}
 
+		// Withhold batch-excluded scopes (e.g. im:message.send_as_user) from
+		// every domain-derived set; an explicit --scope re-adds them below.
+		candidateScopes = filterBatchExcludedScopes(candidateScopes)
+
 		// Filter to auto-approve scopes if --recommend or interactive "common"
 		if opts.Recommend || scopeLevel == "common" {
 			candidateScopes = registry.FilterAutoApproveScopes(candidateScopes)
@@ -502,6 +506,28 @@ func findProfileByName(multi *core.MultiAppConfig, profileName string) *core.App
 		}
 	}
 	return nil
+}
+
+// batchExcludedScopes lists scopes deliberately withheld from the aggregate
+// batch sets that --domain / --recommend / bare `auth login` compute. In some
+// tenants im:message.send_as_user requires admin review even for a personal
+// assistant, so requesting it in bulk blocks users on approval. It stays
+// available through an explicit --scope and through the on-demand grant flow
+// when a command actually needs it.
+var batchExcludedScopes = map[string]bool{
+	"im:message.send_as_user": true,
+}
+
+// filterBatchExcludedScopes drops batchExcludedScopes entries from a
+// domain-derived scope slice, preserving order.
+func filterBatchExcludedScopes(scopes []string) []string {
+	out := scopes[:0:0]
+	for _, s := range scopes {
+		if !batchExcludedScopes[s] {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // collectScopesForDomains collects API scopes (from from_meta projects) and

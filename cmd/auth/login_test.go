@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"slices"
 	"sort"
 	"strings"
@@ -1381,5 +1382,88 @@ func TestGetDomainMetadata_ExcludesAuthDomainChildren(t *testing.T) {
 		if dm.Name == "whiteboard" {
 			t.Error("whiteboard should not appear in interactive domain list (has auth_domain=docs)")
 		}
+	}
+}
+
+func TestFilterBatchExcludedScopes(t *testing.T) {
+	got := filterBatchExcludedScopes([]string{"im:message", "im:message.send_as_user", "im:message:readonly"})
+	want := []string{"im:message", "im:message:readonly"}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	clean := []string{"im:message", "calendar:calendar:read"}
+	if got := filterBatchExcludedScopes(clean); !slices.Equal(got, clean) {
+		t.Errorf("clean input changed: got %v, want %v", got, clean)
+	}
+	if got := filterBatchExcludedScopes(nil); len(got) != 0 {
+		t.Errorf("nil input: got %v, want empty", got)
+	}
+}
+
+func TestBatchExcludedScopes_ContainsSendAsUser(t *testing.T) {
+	if !batchExcludedScopes["im:message.send_as_user"] {
+		t.Fatal("batchExcludedScopes must contain im:message.send_as_user")
+	}
+}
+
+func TestFilterBatchExcludedScopes_OnImDomainSet(t *testing.T) {
+	raw := collectScopesForDomains([]string{"im"}, "user", "")
+	if !slices.Contains(raw, "im:message.send_as_user") {
+		t.Fatal("precondition: im domain set must contain im:message.send_as_user (on-demand grant source intact)")
+	}
+	filtered := filterBatchExcludedScopes(raw)
+	if slices.Contains(filtered, "im:message.send_as_user") {
+		t.Error("filtered set must not contain im:message.send_as_user")
+	}
+	if !slices.Contains(filtered, "im:message") {
+		t.Error("filtered set should still contain im:message")
+	}
+}
+
+func TestAuthLoginRun_BatchExcludesSendAsUser(t *testing.T) {
+	extractScope := func(body []byte) string {
+		v, _ := url.ParseQuery(string(body))
+		return v.Get("scope")
+	}
+	stubBody := map[string]interface{}{
+		"device_code": "dc", "user_code": "uc",
+		"verification_uri": "https://example.com/v", "verification_uri_complete": "https://example.com/v?c=1",
+		"expires_in": 240, "interval": 5,
+	}
+
+	// (a) --domain im must NOT request send_as_user in the batch set
+	f, _, _, reg := cmdutil.TestFactory(t, &core.CliConfig{
+		ProfileName: "default", AppID: "cli_test", AppSecret: "secret", Brand: core.BrandFeishu,
+	})
+	stub := &httpmock.Stub{Method: "POST", URL: larkauth.PathDeviceAuthorization, Body: stubBody}
+	reg.Register(stub)
+	if err := authLoginRun(&LoginOptions{
+		Factory: f, Ctx: context.Background(),
+		Domains: []string{"im"}, NoWait: true, JSON: true,
+	}); err != nil {
+		t.Fatalf("authLoginRun --domain im: %v", err)
+	}
+	scope := extractScope(stub.CapturedBody)
+	if strings.Contains(scope, "im:message.send_as_user") {
+		t.Errorf("--domain im requested send_as_user; scope=%q", scope)
+	}
+	if !strings.Contains(scope, "im:message") {
+		t.Errorf("--domain im missing im:message; scope=%q", scope)
+	}
+
+	// (b) explicit --scope re-adds it
+	f2, _, _, reg2 := cmdutil.TestFactory(t, &core.CliConfig{
+		ProfileName: "default", AppID: "cli_test", AppSecret: "secret", Brand: core.BrandFeishu,
+	})
+	stub2 := &httpmock.Stub{Method: "POST", URL: larkauth.PathDeviceAuthorization, Body: stubBody}
+	reg2.Register(stub2)
+	if err := authLoginRun(&LoginOptions{
+		Factory: f2, Ctx: context.Background(),
+		Domains: []string{"im"}, Scope: "im:message.send_as_user", NoWait: true, JSON: true,
+	}); err != nil {
+		t.Fatalf("authLoginRun --domain im --scope send_as_user: %v", err)
+	}
+	if scope2 := extractScope(stub2.CapturedBody); !strings.Contains(scope2, "im:message.send_as_user") {
+		t.Errorf("explicit --scope did not re-add send_as_user; scope=%q", scope2)
 	}
 }
