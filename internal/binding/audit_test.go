@@ -361,3 +361,14 @@ func TestAssertSecurePath_TrustedDirs(t *testing.T) {
 		t.Errorf("got %q, want %q", got, trustedFile)
 	}
 }
+
+func TestRequireInTrustedDirs_RejectsSiblingPrefix(t *testing.T) {
+	parent := t.TempDir()
+	trustedDir := filepath.Join(parent, "trusted")
+	siblingPath := filepath.Join(parent, "trusted-backup", "secret.txt")
+
+	err := requireInTrustedDirs(siblingPath, []string{trustedDir}, "test")
+	if err == nil {
+		t.Fatal("expected sibling path sharing the trusted prefix to be rejected")
+	}
+}

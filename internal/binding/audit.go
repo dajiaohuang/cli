@@ -125,7 +125,9 @@ func requireInTrustedDirs(effectivePath string, trustedDirs []string, label stri
 	cleaned := filepath.Clean(effectivePath)
 	for _, dir := range trustedDirs {
 		cleanDir := filepath.Clean(dir)
-		if cleaned == cleanDir || strings.HasPrefix(cleaned, cleanDir+"/") {
+		rel, err := filepath.Rel(cleanDir, cleaned)
+		if err == nil && rel != ".." && !filepath.IsAbs(rel) &&
+			!strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			return nil
 		}
 	}
