@@ -10,6 +10,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/larksuite/cli/internal/vfs"
 )
 
 func TestAssertSecurePath_NonAbsolutePath(t *testing.T) {
@@ -366,13 +368,13 @@ func TestRequireInTrustedDirs_RejectsSiblingPrefix(t *testing.T) {
 	parent := t.TempDir()
 	trustedDir := filepath.Join(parent, "trusted")
 	siblingPath := filepath.Join(parent, "trusted-backup", "secret.txt")
-	if err := os.MkdirAll(trustedDir, 0o700); err != nil {
+	if err := vfs.MkdirAll(trustedDir, 0o700); err != nil {
 		t.Fatalf("create trusted dir: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(siblingPath), 0o700); err != nil {
+	if err := vfs.MkdirAll(filepath.Dir(siblingPath), 0o700); err != nil {
 		t.Fatalf("create sibling dir: %v", err)
 	}
-	if err := os.WriteFile(siblingPath, []byte("data"), 0o600); err != nil {
+	if err := vfs.WriteFile(siblingPath, []byte("data"), 0o600); err != nil {
 		t.Fatalf("write sibling file: %v", err)
 	}
 
@@ -386,17 +388,18 @@ func TestAssertSecurePath_TrustedDirs_ParentSymlinkEscapeRejected(t *testing.T) 
 	parent := t.TempDir()
 	trustedDir := filepath.Join(parent, "trusted")
 	outsideDir := filepath.Join(parent, "outside")
-	if err := os.MkdirAll(trustedDir, 0o700); err != nil {
+	if err := vfs.MkdirAll(trustedDir, 0o700); err != nil {
 		t.Fatalf("create trusted dir: %v", err)
 	}
-	if err := os.MkdirAll(outsideDir, 0o700); err != nil {
+	if err := vfs.MkdirAll(outsideDir, 0o700); err != nil {
 		t.Fatalf("create outside dir: %v", err)
 	}
 	outsideFile := filepath.Join(outsideDir, "secret.txt")
-	if err := os.WriteFile(outsideFile, []byte("data"), 0o600); err != nil {
+	if err := vfs.WriteFile(outsideFile, []byte("data"), 0o600); err != nil {
 		t.Fatalf("write outside file: %v", err)
 	}
 	link := filepath.Join(trustedDir, "link-out")
+	// vfs has no symlink creator; both paths are bounded by parent from t.TempDir.
 	if err := os.Symlink(outsideDir, link); err != nil {
 		t.Skipf("create parent symlink: %v", err)
 	}
@@ -415,14 +418,15 @@ func TestAssertSecurePath_TrustedDirs_ParentSymlinkEscapeRejected(t *testing.T) 
 func TestAssertSecurePath_TrustedDirs_TrustedDirSymlinkAllowed(t *testing.T) {
 	parent := t.TempDir()
 	realDir := filepath.Join(parent, "real")
-	if err := os.MkdirAll(realDir, 0o700); err != nil {
+	if err := vfs.MkdirAll(realDir, 0o700); err != nil {
 		t.Fatalf("create real dir: %v", err)
 	}
 	target := filepath.Join(realDir, "secret.txt")
-	if err := os.WriteFile(target, []byte("data"), 0o600); err != nil {
+	if err := vfs.WriteFile(target, []byte("data"), 0o600); err != nil {
 		t.Fatalf("write target file: %v", err)
 	}
 	trustedLink := filepath.Join(parent, "trusted-link")
+	// vfs has no symlink creator; both paths are bounded by parent from t.TempDir.
 	if err := os.Symlink(realDir, trustedLink); err != nil {
 		t.Skipf("create trusted-dir symlink: %v", err)
 	}
