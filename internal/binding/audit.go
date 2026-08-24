@@ -122,10 +122,18 @@ func requireInTrustedDirs(effectivePath string, trustedDirs []string, label stri
 	if len(trustedDirs) == 0 {
 		return nil
 	}
-	cleaned := filepath.Clean(effectivePath)
+	// Resolve parent symlinks on both sides before the lexical containment
+	// check so a path cannot appear trusted while resolving outside the root.
+	resolvedPath, err := vfs.EvalSymlinks(filepath.Clean(effectivePath))
+	if err != nil {
+		return fmt.Errorf("%s: cannot resolve path %q for trusted directory audit: %w", label, effectivePath, err)
+	}
 	for _, dir := range trustedDirs {
-		cleanDir := filepath.Clean(dir)
-		rel, err := filepath.Rel(cleanDir, cleaned)
+		resolvedDir, err := vfs.EvalSymlinks(filepath.Clean(dir))
+		if err != nil {
+			continue
+		}
+		rel, err := filepath.Rel(resolvedDir, resolvedPath)
 		if err == nil && rel != ".." && !filepath.IsAbs(rel) &&
 			!strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			return nil
