@@ -62,8 +62,8 @@ func TestSuccessEnvelopeData_NonDataPayloadKeyPreserved(t *testing.T) {
 		"msg":  "ok",
 		"bot": map[string]interface{}{
 			"activate_status": 2,
-			"app_name":       "TestBot",
-			"open_id":        "ou_123",
+			"app_name":        "TestBot",
+			"open_id":         "ou_123",
 		},
 	}
 
