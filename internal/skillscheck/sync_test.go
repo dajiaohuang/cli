@@ -745,7 +745,7 @@ func TestNormalizeSuiteGuidesRenamesNestedEntrypointsAndReferences(t *testing.T)
 		t.Fatal(err)
 	}
 	for _, path := range paths {
-		content := "read SKILL.md and ../../SKILL.md"
+		content := "read SKILL.md and ./SKILL.md and ../../SKILL.md"
 		if path == paths[0] {
 			content += " and ../lark-mail/SKILL.md"
 		}
@@ -770,7 +770,7 @@ func TestNormalizeSuiteGuidesRenamesNestedEntrypointsAndReferences(t *testing.T)
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := "read GUIDE.md and ../../SKILL.md"
+		want := "read GUIDE.md and ./GUIDE.md and ../../SKILL.md"
 		if strings.Contains(path, "lark-calendar"+string(filepath.Separator)+"GUIDE.md") {
 			want += " and ../lark-mail/GUIDE.md"
 		}
