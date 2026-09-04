@@ -136,15 +136,18 @@ func normalizeSuiteGuides(suitePath string) error {
 			oldRel := filepath.ToSlash(relativePath(filepath.Dir(path), rename.oldPath))
 			newRel := filepath.ToSlash(relativePath(filepath.Dir(path), rename.newPath))
 			if oldRel == "SKILL.md" {
-				updated = regexp.MustCompile(`(^|[^A-Za-z0-9_./\\-])(\./)?SKILL\.md`).ReplaceAllString(updated, `${1}${2}GUIDE.md`)
+				updated = regexp.MustCompile(`(^|[^A-Za-z0-9_./\\-])(\./|\.\\)?SKILL\.md`).ReplaceAllString(updated, `${1}${2}GUIDE.md`)
 			} else {
+				oldBackslash := strings.ReplaceAll(oldRel, "/", `\`)
+				newBackslash := strings.ReplaceAll(newRel, "/", `\`)
+				updated = replaceSuitePathToken(updated, "./"+oldRel, "./"+newRel)
+				updated = replaceSuitePathToken(updated, `.\`+oldBackslash, `.\`+newBackslash)
 				updated = replaceSuitePathToken(updated, oldRel, newRel)
-				updated = replaceSuitePathToken(updated, strings.ReplaceAll(oldRel, "/", `\`), strings.ReplaceAll(newRel, "/", `\`))
+				updated = replaceSuitePathToken(updated, oldBackslash, newBackslash)
 			}
 		}
 		if path == filepath.Join(suitePath, "SKILL.md") {
 			updated = strings.ReplaceAll(updated, "references/<skill-name>/SKILL.md", "references/<skill-name>/GUIDE.md")
-			updated = regexp.MustCompile(`(references/[A-Za-z0-9_-]+)/SKILL\.md`).ReplaceAllString(updated, `${1}/GUIDE.md`)
 			updated = strings.ReplaceAll(updated, `references\<skill-name>\SKILL.md`, `references\<skill-name>\GUIDE.md`)
 		}
 		if updated != string(content) {
@@ -177,7 +180,7 @@ func replaceSuitePathToken(content, oldPath, newPath string) string {
 }
 
 func suitePathChar(value byte) bool {
-	return value == '/' || value == '\\' || value == '-' || value == '_' ||
+	return value == '.' || value == '/' || value == '\\' || value == '-' || value == '_' ||
 		(value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z') || (value >= '0' && value <= '9')
 }
 

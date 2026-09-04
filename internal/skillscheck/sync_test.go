@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/larksuite/cli/internal/selfupdate"
+	"github.com/larksuite/cli/internal/vfs"
 )
 
 func TestParseSkillsListIgnoresUnsupportedFormat(t *testing.T) {
@@ -265,7 +266,7 @@ func (f *fakeSkillsRunner) StageSuite(source, dir string) *selfupdate.NpmResult 
 			return &selfupdate.NpmResult{Err: err}
 		}
 		if f.stageNestedGuides {
-			if err := os.WriteFile(filepath.Join(suite, "references", name, "SKILL.md"), []byte("read SKILL.md"), 0o644); err != nil {
+			if err := vfs.WriteFile(filepath.Join(suite, "references", name, "SKILL.md"), []byte("read SKILL.md"), 0o644); err != nil {
 				return &selfupdate.NpmResult{Err: err}
 			}
 		}
@@ -274,18 +275,18 @@ func (f *fakeSkillsRunner) StageSuite(source, dir string) *selfupdate.NpmResult 
 	if f.stageNestedGuides {
 		fixture += "Read references/lark-calendar/SKILL.md.\n"
 	}
-	if err := os.WriteFile(filepath.Join(suite, "SKILL.md"), []byte(fixture), 0o644); err != nil {
+	if err := vfs.WriteFile(filepath.Join(suite, "SKILL.md"), []byte(fixture), 0o644); err != nil {
 		return &selfupdate.NpmResult{Err: err}
 	}
 	return &selfupdate.NpmResult{}
 }
 func (f *fakeSkillsRunner) InstallLocalSuite(path string) *selfupdate.NpmResult {
 	f.localSuite = path
-	root, err := os.ReadFile(filepath.Join(path, "SKILL.md"))
+	root, err := vfs.ReadFile(filepath.Join(path, "SKILL.md"))
 	if err == nil {
 		f.localRoot = string(root)
 	}
-	_, err = os.Stat(filepath.Join(path, "references", "lark-calendar", "GUIDE.md"))
+	_, err = vfs.Stat(filepath.Join(path, "references", "lark-calendar", "GUIDE.md"))
 	f.localGuide = err == nil
 	return &selfupdate.NpmResult{}
 }
@@ -730,7 +731,7 @@ func TestPrepareSuiteCropsRoutesKeywordsAndReferences(t *testing.T) {
 func TestNormalizeSuiteGuidesRenamesNestedEntrypointsAndReferences(t *testing.T) {
 	suite := t.TempDir()
 	guideDir := filepath.Join(suite, "references", "lark-calendar", "references")
-	if err := os.MkdirAll(guideDir, 0o755); err != nil {
+	if err := vfs.MkdirAll(guideDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	paths := []string{
@@ -738,20 +739,24 @@ func TestNormalizeSuiteGuidesRenamesNestedEntrypointsAndReferences(t *testing.T)
 		filepath.Join(guideDir, "SKILL.md"),
 		filepath.Join(suite, "references", "lark-mail", "SKILL.md"),
 	}
-	if err := os.MkdirAll(filepath.Dir(paths[2]), 0o755); err != nil {
+	if err := vfs.MkdirAll(filepath.Dir(paths[2]), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(suite, "SKILL.md"), []byte("read references/lark-calendar/SKILL.md and references/<skill-name>/SKILL.md; keep the word SKILL.md"), 0o644); err != nil {
+	if err := vfs.WriteFile(filepath.Join(suite, "SKILL.md"), []byte("read references/lark-calendar/SKILL.md and references/<skill-name>/SKILL.md; keep references/not-renamed/SKILL.md"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	for _, path := range paths {
-		content := "read SKILL.md and ./SKILL.md and ../../SKILL.md"
+		content := "read SKILL.md and ./SKILL.md and .\\SKILL.md and ../../SKILL.md"
 		if path == paths[0] {
-			content += " and ../lark-mail/SKILL.md"
+			content += " and ../lark-mail/SKILL.md and ./../lark-mail/SKILL.md and .\\..\\lark-mail\\SKILL.md"
 		}
-		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		if err := vfs.WriteFile(path, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
+	}
+	readme := filepath.Join(suite, "references", "lark-calendar", "README.md")
+	if err := vfs.WriteFile(readme, []byte("read ../lark-mail/SKILL.md and ./../lark-mail/SKILL.md"), 0o644); err != nil {
+		t.Fatal(err)
 	}
 	if err := normalizeSuiteGuides(suite); err != nil {
 		t.Fatal(err)
@@ -766,24 +771,31 @@ func TestNormalizeSuiteGuidesRenamesNestedEntrypointsAndReferences(t *testing.T)
 		filepath.Join(guideDir, "GUIDE.md"),
 		filepath.Join(suite, "references", "lark-mail", "GUIDE.md"),
 	} {
-		content, err := os.ReadFile(path)
+		content, err := vfs.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := "read GUIDE.md and ./GUIDE.md and ../../SKILL.md"
+		want := "read GUIDE.md and ./GUIDE.md and .\\GUIDE.md and ../../SKILL.md"
 		if strings.Contains(path, "lark-calendar"+string(filepath.Separator)+"GUIDE.md") {
-			want += " and ../lark-mail/GUIDE.md"
+			want += " and ../lark-mail/GUIDE.md and ./../lark-mail/GUIDE.md and .\\..\\lark-mail\\GUIDE.md"
 		}
 		if string(content) != want {
 			t.Fatalf("content at %s = %q", path, content)
 		}
 	}
-	rootContent, err := os.ReadFile(filepath.Join(suite, "SKILL.md"))
+	rootContent, err := vfs.ReadFile(filepath.Join(suite, "SKILL.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(rootContent) != "read references/lark-calendar/GUIDE.md and references/<skill-name>/GUIDE.md; keep the word SKILL.md" {
+	if string(rootContent) != "read references/lark-calendar/GUIDE.md and references/<skill-name>/GUIDE.md; keep references/not-renamed/SKILL.md" {
 		t.Fatalf("root router content = %q", rootContent)
+	}
+	readmeContent, err := vfs.ReadFile(readme)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(readmeContent) != "read ../lark-mail/GUIDE.md and ./../lark-mail/GUIDE.md" {
+		t.Fatalf("README.md content = %q", readmeContent)
 	}
 }
 
