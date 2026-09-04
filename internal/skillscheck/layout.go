@@ -88,7 +88,9 @@ func syncSuite(runner SkillsRunner, source string, plan SyncPlan, installed []in
 // standalone skills by recursive skill catalogues.
 func normalizeSuiteGuides(suitePath string) error {
 	root := filepath.Join(suitePath, "references")
-	var skillFiles, markdownFiles []string
+	type guideRename struct{ oldPath, newPath, dir string }
+	var renames []guideRename
+	markdownFiles := []string{filepath.Join(suitePath, "SKILL.md")}
 	var visit func(string) error
 	visit = func(dir string) error {
 		entries, err := vfs.ReadDir(dir)
@@ -104,9 +106,9 @@ func normalizeSuiteGuides(suitePath string) error {
 				continue
 			}
 			if entry.Name() == "SKILL.md" {
-				skillFiles = append(skillFiles, path)
+				renames = append(renames, guideRename{oldPath: path, newPath: filepath.Join(dir, "GUIDE.md"), dir: dir})
 			}
-			if strings.HasSuffix(entry.Name(), ".md") {
+			if strings.HasSuffix(entry.Name(), ".md") && entry.Name() != "SKILL.md" {
 				markdownFiles = append(markdownFiles, path)
 			}
 		}
@@ -115,20 +117,35 @@ func normalizeSuiteGuides(suitePath string) error {
 	if err := visit(root); err != nil {
 		return fmt.Errorf("inspect suite guides: %w", err)
 	}
-	for _, path := range skillFiles {
-		if err := vfs.Rename(path, filepath.Join(filepath.Dir(path), "GUIDE.md")); err != nil {
+	for _, rename := range renames {
+		if _, err := vfs.Stat(rename.newPath); err == nil {
+			return fmt.Errorf("rename nested suite guide: destination already exists: %s", filepath.Base(rename.newPath))
+		}
+		if err := vfs.Rename(rename.oldPath, rename.newPath); err != nil {
 			return fmt.Errorf("rename nested suite guide: %w", err)
 		}
+		markdownFiles = append(markdownFiles, rename.newPath)
 	}
 	for _, path := range markdownFiles {
-		if filepath.Base(path) == "SKILL.md" {
-			path = filepath.Join(filepath.Dir(path), "GUIDE.md")
-		}
 		content, err := vfs.ReadFile(path)
 		if err != nil {
 			return fmt.Errorf("read suite guide %s: %w", filepath.Base(path), err)
 		}
-		updated := strings.ReplaceAll(string(content), "SKILL.md", "GUIDE.md")
+		updated := string(content)
+		for _, rename := range renames {
+			oldRel := filepath.ToSlash(relativePath(filepath.Dir(path), rename.oldPath))
+			newRel := filepath.ToSlash(relativePath(filepath.Dir(path), rename.newPath))
+			if oldRel == "SKILL.md" {
+				updated = regexp.MustCompile(`(^|[^.])\./SKILL\.md`).ReplaceAllString(updated, `$1./GUIDE.md`)
+			} else {
+				updated = replaceSuitePathToken(updated, oldRel, newRel)
+				updated = replaceSuitePathToken(updated, strings.ReplaceAll(oldRel, "/", `\`), strings.ReplaceAll(newRel, "/", `\`))
+			}
+		}
+		if path == filepath.Join(suitePath, "SKILL.md") {
+			updated = strings.ReplaceAll(updated, "references/<skill-name>/SKILL.md", "references/<skill-name>/GUIDE.md")
+			updated = strings.ReplaceAll(updated, `references\<skill-name>\SKILL.md`, `references\<skill-name>\GUIDE.md`)
+		}
 		if updated != string(content) {
 			if err := vfs.WriteFile(path, []byte(updated), 0o644); err != nil {
 				return fmt.Errorf("rewrite suite guide %s: %w", filepath.Base(path), err)
@@ -136,6 +153,44 @@ func normalizeSuiteGuides(suitePath string) error {
 		}
 	}
 	return nil
+}
+
+func replaceSuitePathToken(content, oldPath, newPath string) string {
+	for cursor := 0; ; {
+		rel := strings.Index(content[cursor:], oldPath)
+		if rel < 0 {
+			break
+		}
+		start := cursor + rel
+		end := start + len(oldPath)
+		beforeOK := start == 0 || !suitePathChar(content[start-1])
+		afterOK := end == len(content) || !suitePathContinuation(content[end])
+		if beforeOK && afterOK {
+			content = content[:start] + newPath + content[end:]
+			cursor = start + len(newPath)
+		} else {
+			cursor = start + 1
+		}
+	}
+	return content
+}
+
+func suitePathChar(value byte) bool {
+	return value == '/' || value == '\\' || value == '-' || value == '_' ||
+		(value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z') || (value >= '0' && value <= '9')
+}
+
+func suitePathContinuation(value byte) bool {
+	return value == '/' || value == '\\' || value == '-' || value == '_' ||
+		(value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z') || (value >= '0' && value <= '9')
+}
+
+func relativePath(root, target string) string {
+	rel, err := filepath.Rel(root, target)
+	if err != nil {
+		return target
+	}
+	return rel
 }
 
 func prepareSuite(suitePath string, official, target []string) error {
