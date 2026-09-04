@@ -741,11 +741,11 @@ func TestNormalizeSuiteGuidesRenamesNestedEntrypointsAndReferences(t *testing.T)
 	if err := os.MkdirAll(filepath.Dir(paths[2]), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(suite, "SKILL.md"), []byte("read references/lark-calendar/SKILL.md; keep the word SKILL.md"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(suite, "SKILL.md"), []byte("read references/lark-calendar/SKILL.md and references/<skill-name>/SKILL.md; keep the word SKILL.md"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	for _, path := range paths {
-		content := "read ./SKILL.md and ../../SKILL.md"
+		content := "read SKILL.md and ../../SKILL.md"
 		if path == paths[0] {
 			content += " and ../lark-mail/SKILL.md"
 		}
@@ -770,7 +770,7 @@ func TestNormalizeSuiteGuidesRenamesNestedEntrypointsAndReferences(t *testing.T)
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := "read ./GUIDE.md and ../../SKILL.md"
+		want := "read GUIDE.md and ../../SKILL.md"
 		if strings.Contains(path, "lark-calendar"+string(filepath.Separator)+"GUIDE.md") {
 			want += " and ../lark-mail/GUIDE.md"
 		}
@@ -782,7 +782,7 @@ func TestNormalizeSuiteGuidesRenamesNestedEntrypointsAndReferences(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(rootContent) != "read references/lark-calendar/GUIDE.md; keep the word SKILL.md" {
+	if string(rootContent) != "read references/lark-calendar/GUIDE.md and references/<skill-name>/GUIDE.md; keep the word SKILL.md" {
 		t.Fatalf("root router content = %q", rootContent)
 	}
 }
