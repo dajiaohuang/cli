@@ -689,6 +689,43 @@ func TestPrepareSuiteCropsRoutesKeywordsAndReferences(t *testing.T) {
 	}
 }
 
+func TestNormalizeSuiteGuidesRenamesNestedEntrypointsAndReferences(t *testing.T) {
+	suite := t.TempDir()
+	guideDir := filepath.Join(suite, "references", "lark-calendar", "references")
+	if err := os.MkdirAll(guideDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	paths := []string{
+		filepath.Join(suite, "references", "lark-calendar", "SKILL.md"),
+		filepath.Join(guideDir, "SKILL.md"),
+	}
+	for _, path := range paths {
+		if err := os.WriteFile(path, []byte("read SKILL.md"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := normalizeSuiteGuides(suite); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range paths {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("nested SKILL.md still exists at %s: %v", path, err)
+		}
+	}
+	for _, path := range []string{
+		filepath.Join(suite, "references", "lark-calendar", "GUIDE.md"),
+		filepath.Join(guideDir, "GUIDE.md"),
+	} {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(content) != "read GUIDE.md" {
+			t.Fatalf("content at %s = %q", path, content)
+		}
+	}
+}
+
 func TestCropSuiteRoutesRemovesBoundaryLinesWithoutChangingNeighbors(t *testing.T) {
 	routes := []string{
 		"- lark-approval（审批）: approval",

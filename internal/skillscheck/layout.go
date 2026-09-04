@@ -68,6 +68,9 @@ func syncSuite(runner SkillsRunner, source string, plan SyncPlan, installed []in
 	}
 
 	suitePath := filepath.Join(stagingRoot, ".agents", "skills", "lark-suite")
+	if err := normalizeSuiteGuides(suitePath); err != nil {
+		return err
+	}
 	if err := prepareSuite(suitePath, plan.OfficialSkills, plan.ToUpdate); err != nil {
 		return err
 	}
@@ -77,6 +80,60 @@ func syncSuite(runner SkillsRunner, source string, plan SyncPlan, installed []in
 	}
 	if err := removeSkills(runner, installedSeparate); err != nil {
 		return err
+	}
+	return nil
+}
+
+// normalizeSuiteGuides keeps nested domain guides from being discovered as
+// standalone skills by recursive skill catalogues.
+func normalizeSuiteGuides(suitePath string) error {
+	root := filepath.Join(suitePath, "references")
+	var skillFiles, markdownFiles []string
+	var visit func(string) error
+	visit = func(dir string) error {
+		entries, err := vfs.ReadDir(dir)
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			path := filepath.Join(dir, entry.Name())
+			if entry.IsDir() {
+				if err := visit(path); err != nil {
+					return err
+				}
+				continue
+			}
+			if entry.Name() == "SKILL.md" {
+				skillFiles = append(skillFiles, path)
+			}
+			if strings.HasSuffix(entry.Name(), ".md") {
+				markdownFiles = append(markdownFiles, path)
+			}
+		}
+		return nil
+	}
+	if err := visit(root); err != nil {
+		return fmt.Errorf("inspect suite guides: %w", err)
+	}
+	for _, path := range skillFiles {
+		if err := vfs.Rename(path, filepath.Join(filepath.Dir(path), "GUIDE.md")); err != nil {
+			return fmt.Errorf("rename nested suite guide: %w", err)
+		}
+	}
+	for _, path := range markdownFiles {
+		if filepath.Base(path) == "SKILL.md" {
+			path = filepath.Join(filepath.Dir(path), "GUIDE.md")
+		}
+		content, err := vfs.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read suite guide %s: %w", filepath.Base(path), err)
+		}
+		updated := strings.ReplaceAll(string(content), "SKILL.md", "GUIDE.md")
+		if updated != string(content) {
+			if err := vfs.WriteFile(path, []byte(updated), 0o644); err != nil {
+				return fmt.Errorf("rewrite suite guide %s: %w", filepath.Base(path), err)
+			}
+		}
 	}
 	return nil
 }
