@@ -90,6 +90,25 @@ func TestSuccessEnvelopeData_NonDataPayloadKeyPreserved(t *testing.T) {
 	}
 }
 
+func TestSuccessEnvelopeData_NilDataPreservesNonDataPayload(t *testing.T) {
+	got := SuccessEnvelopeData(map[string]interface{}{
+		"code": float64(0),
+		"msg":  "ok",
+		"data": nil,
+		"bot":  map[string]interface{}{"app_name": "TestBot"},
+	})
+	m, ok := got.(map[string]interface{})
+	if !ok {
+		t.Fatalf("business data type = %T, want map", got)
+	}
+	if _, ok := m["data"]; ok {
+		t.Fatal("business data must not contain nil transport data")
+	}
+	if _, ok := m["bot"]; !ok {
+		t.Fatalf("business data = %#v, want bot payload", m)
+	}
+}
+
 func TestWriteSuccessEnvelope_PrintsShortcutCompatibleEnvelope(t *testing.T) {
 	var out strings.Builder
 
