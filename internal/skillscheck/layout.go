@@ -136,7 +136,7 @@ func normalizeSuiteGuides(suitePath string) error {
 			oldRel := filepath.ToSlash(relativePath(filepath.Dir(path), rename.oldPath))
 			newRel := filepath.ToSlash(relativePath(filepath.Dir(path), rename.newPath))
 			if oldRel == "SKILL.md" {
-				updated = regexp.MustCompile(`(^|[^A-Za-z0-9_./\\-])(\./|\.\\)?SKILL\.md`).ReplaceAllString(updated, `${1}${2}GUIDE.md`)
+				updated = regexp.MustCompile(`(^|[^A-Za-z0-9_./\\-])(\./|\.\\)SKILL\.md`).ReplaceAllString(updated, `${1}${2}GUIDE.md`)
 			} else {
 				oldBackslash := strings.ReplaceAll(oldRel, "/", `\`)
 				newBackslash := strings.ReplaceAll(newRel, "/", `\`)

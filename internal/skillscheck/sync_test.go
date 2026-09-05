@@ -758,6 +758,19 @@ func TestNormalizeSuiteGuidesRenamesNestedEntrypointsAndReferences(t *testing.T)
 	if err := vfs.WriteFile(readme, []byte("read ../lark-mail/SKILL.md and ./../lark-mail/SKILL.md"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	skillMaker := filepath.Join(suite, "references", "lark-skill-maker", "SKILL.md")
+	shared := filepath.Join(suite, "references", "lark-shared", "SKILL.md")
+	for _, path := range []string{skillMaker, shared} {
+		if err := vfs.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := vfs.WriteFile(skillMaker, []byte("Skill = a `SKILL.md`.\n## SKILL.md template\nFile: `skills/lark-<name>/SKILL.md`.\nRead ../lark-shared/SKILL.md."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := vfs.WriteFile(shared, []byte("shared guide"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if err := normalizeSuiteGuides(suite); err != nil {
 		t.Fatal(err)
 	}
@@ -775,7 +788,7 @@ func TestNormalizeSuiteGuidesRenamesNestedEntrypointsAndReferences(t *testing.T)
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := "read GUIDE.md and ./GUIDE.md and .\\GUIDE.md and ../../SKILL.md"
+		want := "read SKILL.md and ./GUIDE.md and .\\GUIDE.md and ../../SKILL.md"
 		if strings.Contains(path, "lark-calendar"+string(filepath.Separator)+"GUIDE.md") {
 			want += " and ../lark-mail/GUIDE.md and ./../lark-mail/GUIDE.md and .\\..\\lark-mail\\GUIDE.md"
 		}
@@ -796,6 +809,13 @@ func TestNormalizeSuiteGuidesRenamesNestedEntrypointsAndReferences(t *testing.T)
 	}
 	if string(readmeContent) != "read ../lark-mail/GUIDE.md and ./../lark-mail/GUIDE.md" {
 		t.Fatalf("README.md content = %q", readmeContent)
+	}
+	skillMakerContent, err := vfs.ReadFile(filepath.Join(suite, "references", "lark-skill-maker", "GUIDE.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(skillMakerContent) != "Skill = a `SKILL.md`.\n## SKILL.md template\nFile: `skills/lark-<name>/SKILL.md`.\nRead ../lark-shared/GUIDE.md." {
+		t.Fatalf("skill-maker guide content = %q", skillMakerContent)
 	}
 }
 
