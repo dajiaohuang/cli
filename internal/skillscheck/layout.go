@@ -136,7 +136,8 @@ func normalizeSuiteGuides(suitePath string) error {
 			oldRel := filepath.ToSlash(relativePath(filepath.Dir(path), rename.oldPath))
 			newRel := filepath.ToSlash(relativePath(filepath.Dir(path), rename.newPath))
 			if oldRel == "SKILL.md" {
-				updated = regexp.MustCompile(`(^|[^A-Za-z0-9_./\\-])(\./|\.\\)SKILL\.md`).ReplaceAllString(updated, `${1}${2}GUIDE.md`)
+				updated = replaceCurrentSuiteGuideToken(updated, "./SKILL.md", "./GUIDE.md")
+				updated = replaceCurrentSuiteGuideToken(updated, `.\SKILL.md`, `.\GUIDE.md`)
 			} else {
 				oldBackslash := strings.ReplaceAll(oldRel, "/", `\`)
 				newBackslash := strings.ReplaceAll(newRel, "/", `\`)
@@ -157,6 +158,36 @@ func normalizeSuiteGuides(suitePath string) error {
 		}
 	}
 	return nil
+}
+
+func replaceCurrentSuiteGuideToken(content, oldPath, newPath string) string {
+	for cursor := 0; ; {
+		rel := strings.Index(content[cursor:], oldPath)
+		if rel < 0 {
+			break
+		}
+		start := cursor + rel
+		end := start + len(oldPath)
+		beforeOK := start == 0 || !suitePathChar(content[start-1])
+		afterOK := end == len(content) || !currentGuideContinuation(content, end)
+		if beforeOK && afterOK {
+			content = content[:start] + newPath + content[end:]
+			cursor = start + len(newPath)
+		} else {
+			cursor = start + 1
+		}
+	}
+	return content
+}
+
+func currentGuideContinuation(content string, index int) bool {
+	if content[index] != '.' {
+		return suitePathContinuation(content[index])
+	}
+	for index < len(content) && content[index] == '.' {
+		index++
+	}
+	return index < len(content) && suitePathContinuation(content[index])
 }
 
 func replaceSuitePathToken(content, oldPath, newPath string) string {

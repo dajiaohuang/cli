@@ -765,7 +765,7 @@ func TestNormalizeSuiteGuidesRenamesNestedEntrypointsAndReferences(t *testing.T)
 			t.Fatal(err)
 		}
 	}
-	if err := vfs.WriteFile(skillMaker, []byte("Skill = a `SKILL.md`.\n## SKILL.md template\nFile: `skills/lark-<name>/SKILL.md`.\nRead ../lark-shared/SKILL.md."), 0o644); err != nil {
+	if err := vfs.WriteFile(skillMaker, []byte("Skill = a `SKILL.md`.\n## SKILL.md template\nFile: `skills/lark-<name>/SKILL.md`.\nRead ../lark-shared/SKILL.md.\nPaths: ./SKILL.md.template, ./SKILL.md.bak, ./SKILL.md-old, ./SKILL.md, and ./SKILL.md."), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := vfs.WriteFile(shared, []byte("shared guide"), 0o644); err != nil {
@@ -814,7 +814,7 @@ func TestNormalizeSuiteGuidesRenamesNestedEntrypointsAndReferences(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(skillMakerContent) != "Skill = a `SKILL.md`.\n## SKILL.md template\nFile: `skills/lark-<name>/SKILL.md`.\nRead ../lark-shared/GUIDE.md." {
+	if string(skillMakerContent) != "Skill = a `SKILL.md`.\n## SKILL.md template\nFile: `skills/lark-<name>/SKILL.md`.\nRead ../lark-shared/GUIDE.md.\nPaths: ./SKILL.md.template, ./SKILL.md.bak, ./SKILL.md-old, ./GUIDE.md, and ./GUIDE.md." {
 		t.Fatalf("skill-maker guide content = %q", skillMakerContent)
 	}
 }
